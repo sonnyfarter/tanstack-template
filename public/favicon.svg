@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PowerOps">
+  <defs>
+    <linearGradient id="bg" x1="256" y1="40" x2="256" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2F2F4"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="200" y1="96" x2="312" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0A84FF"/>
+      <stop offset="1" stop-color="#0040DD"/>
+    </linearGradient>
+    <filter id="boltShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="4" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Hexagon plate: light, Apple-style off-white with hairline stroke -->
+  <path d="M256 24 L460 140 L460 372 L256 488 L52 372 L52 140 Z"
+        fill="url(#bg)"
+        stroke="#D8D8DD"
+        stroke-width="6"
+        stroke-linejoin="round"/>
+
+  <!-- Lightning bolt: refined geometry, Apple-blue gradient -->
+  <path d="M286 96 L168 286 L240 286 L226 416 L344 226 L272 226 L286 96 Z"
+        fill="url(#bolt)"
+        filter="url(#boltShadow)"/>
+</svg>
