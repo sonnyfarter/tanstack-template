@@ -6,10 +6,13 @@ import {
   Copy,
   Download,
   FileText,
+  Loader2,
   Printer,
   RotateCcw,
   Star,
+  Upload,
 } from 'lucide-react'
+import { extractPdfText, parseBlueStarQuote } from '../utils/parseQuote'
 
 /* ------------------------------------------------------------------ */
 /*  Schema                                                             */
@@ -436,113 +439,326 @@ function estimateAmps(s: SpecState): string | null {
   return amps.toFixed(0)
 }
 
-function buildSpecText(s: SpecState): string {
-  const fla = (s.ratedAmps as string) || estimateAmps(s)
-  const line = (label: string, val?: string | string[]) => {
-    const v = Array.isArray(val) ? val.join(', ') : val
-    return v ? `${label.padEnd(26)} ${v}` : ''
-  }
-  const sections: Array<[string, string[]]> = [
-    [
-      'PROJECT',
-      [
-        line('Project', s.projectName),
-        line('Location', s.location),
-        line('Spec / Quote #', s.specNumber),
-        line('Date', s.date),
-        line('Engineer', s.engineer),
-        line('Contractor', s.contractor),
-        line('Representative', s.rep),
-        line('Application', s.application),
-      ],
-    ],
-    [
-      'GENERATOR SET',
-      [
-        line('Model', s.model),
-        line('Fuel', s.fuelType),
-        line('Output', s.powerKW ? `${s.powerKW} kW / ${s.powerKVA || '—'} kVA @ ${s.powerFactor} PF` : ''),
-        line('Voltage', s.voltage),
-        line('Phase / Frequency', `${s.phase} · ${s.frequency}`),
-        line('Rated current', fla ? `${fla} A${s.ratedAmps ? '' : ' (est.)'}` : ''),
-      ],
-    ],
-    [
-      'ENGINE & ALTERNATOR',
-      [
-        line('Engine', [s.engineMake, s.engineModel].filter(Boolean).join(' ')),
-        line('Governor', s.governor),
-        line('Aspiration', s.aspiration),
-        line('Alternator', s.alternatorMake),
-        line('Insulation', s.insulationClass),
-        line('Temp rise', s.tempRise),
-        line('Excitation', s.excitation),
-        line('Voltage regulation', s.voltageReg),
-        line('Ambient rating', s.ambient),
-      ],
-    ],
-    [
-      'ENCLOSURE & FUEL',
-      [
-        line('Enclosure', s.enclosureType),
-        line('Material', s.enclosureMaterial),
-        line('Sound level', s.soundLevel ? `${s.soundLevel} dB(A) @ 23 ft` : ''),
-        line('Fuel tank', s.fuelTank),
-        line('Tank capacity', s.fuelCapacity ? `${s.fuelCapacity} gal` : ''),
-        line('Exhaust silencer', s.exhaust),
-      ],
-    ],
-    [
-      'CONTROLS & ELECTRICAL',
-      [
-        line('Controller', s.controller),
-        line('Communications', s.comms),
-        line('Main breaker', s.mainBreaker === 'Yes' ? [s.breakerAmps && `${s.breakerAmps}A`, s.breakerPoles].filter(Boolean).join(' ') || 'Yes' : 'None'),
-        line('Battery charger', s.batteryCharger),
-        line('Jacket water heater', s.jacketHeater),
-        line('Starting battery', s.battery),
-      ],
-    ],
-    [
-      'TRANSFER & COMPLIANCE',
-      [
-        line('Transfer switch', s.ats === 'Yes' ? [s.atsAmps && `${s.atsAmps}A`, s.atsTransition].filter(Boolean).join(' · ') || 'Yes' : 'None'),
-        line('NFPA 110', s.nfpa110),
-        line('EPA emissions', s.epaTier),
-        line('Warranty', s.warranty),
-        line('Certifications', s.certs),
-        line('Notes', s.notes),
-      ],
-    ],
-  ]
+interface SpecArticle {
+  num: string
+  title: string
+  clauses: string[]
+}
+interface SpecPart {
+  heading: string
+  articles: SpecArticle[]
+}
 
-  const out: string[] = ['BLUE STAR POWER SYSTEMS — GENERATOR SET SPECIFICATION', '']
-  for (const [title, lines] of sections) {
-    const filled = lines.filter(Boolean)
-    if (!filled.length) continue
-    out.push(title, '─'.repeat(52), ...filled, '')
+const EDITORIAL = (c: string) => /^\[/.test(c) || /^NOTE/.test(c)
+
+/**
+ * Build a CSI MasterFormat Section 26 32 13 (Packaged Engine Generators)
+ * guide specification from the field values, framed as basis of design.
+ * Only states what the values support; inserts bracketed editorial notes
+ * where the engineer of record must verify or decide.
+ */
+function buildSpec(s: SpecState): SpecPart[] {
+  const g = (k: string) => (typeof s[k] === 'string' ? (s[k] as string).trim() : '')
+  const arr = (k: string) => (Array.isArray(s[k]) ? (s[k] as string[]) : [])
+  const fla = (s.ratedAmps as string) || estimateAmps(s)
+  const reg = g('voltageReg') || '±0.25%'
+  const fuel = g('fuelType') || 'Engine'
+  const fuelL = fuel.toLowerCase().replace(' (propane)', '')
+  const rpm = g('frequency').includes('50') ? '1500 rpm' : '1800 rpm'
+  const ratingType =
+    g('application') === 'Prime'
+      ? 'prime'
+      : g('application') === 'Continuous'
+        ? 'continuous'
+        : 'emergency standby'
+  const ambient = g('ambient') || '40°C'
+  const kw = g('powerKW')
+  const output = kw
+    ? `${kw} kW${g('powerKVA') ? ` (${g('powerKVA')} kVA)` : ''}${
+        g('powerFactor') ? ` at ${g('powerFactor')} power factor` : ''
+      }`
+    : '[POWER RATING — SPECIFIER TO CONFIRM]'
+  const cleanVolt = g('voltage')
+    ? g('voltage').replace(/\s*\([^)]*\)\s*$/, '').replace(/V?$/, 'V')
+    : ''
+  const cleanPhase = /Single/.test(g('phase'))
+    ? 'single-phase'
+    : g('phase')
+      ? '3-phase'
+      : ''
+  const elec = [cleanVolt, cleanPhase, g('frequency')].filter(Boolean).join(', ')
+
+  // Article builder that strips empty clauses and auto-letters.
+  const A = (num: string, title: string, clauses: Array<string | false>): SpecArticle => ({
+    num,
+    title,
+    clauses: clauses.filter((c): c is string => Boolean(c)),
+  })
+
+  const nfpa = g('nfpa110')
+  const nfpaClause =
+    nfpa && nfpa !== 'Not required'
+      ? `NFPA 110, Standard for Emergency and Standby Power Systems, ${nfpa}.`
+      : 'NFPA 110, Standard for Emergency and Standby Power Systems.'
+
+  const certs = arr('certs')
+  const standards = [
+    'NFPA 70, National Electrical Code.',
+    nfpaClause,
+    'NFPA 37, Standard for the Installation and Use of Stationary Combustion Engines and Gas Turbines.',
+    certs.includes('UL 2200') && 'UL 2200, Stationary Engine Generator Assemblies.',
+    g('fuelType') === 'Diesel' &&
+      g('fuelTank') &&
+      g('fuelTank') !== 'None' &&
+      'UL 142, Steel Aboveground Tanks for Flammable and Combustible Liquids.',
+    certs.includes('CSA') && 'CSA C22.2, Canadian Standards Association certification.',
+    g('epaTier') &&
+      g('epaTier') !== 'Not applicable' &&
+      `U.S. EPA 40 CFR — stationary compression-ignition emissions (${g('epaTier')}).`,
+    'NEMA MG-1, Motors and Generators.',
+    'IEEE 446, Emergency and Standby Power Systems (Recommended Practice).',
+    'International Building Code (IBC) — seismic and wind requirements.',
+  ].filter(Boolean) as string[]
+
+  const subDesc = `Outdoor, packaged, ${fuelL}-fueled engine-generator set, ${output}, ${
+    elec || '[ELECTRICAL CHARACTERISTICS]'
+  }, for ${ratingType} service.`
+
+  const part1 = {
+    heading: 'PART 1 - GENERAL',
+    articles: [
+      A('1.01', 'BASIS OF DESIGN', [
+        `The design of this Section is based on Blue Star Power Systems${
+          g('model') ? `, Model ${g('model')}` : ''
+        }${g('specNumber') ? `, as represented in Quote No. ${g('specNumber')}` : ''}${
+          g('date') ? ` dated ${g('date')}` : ''
+        }.`,
+        'NOTE TO SPECIFIER: This document is a basis-of-design guide specification generated from a manufacturer quotation. Verify all values, edit bracketed items, and coordinate with project drawings before sealing.',
+        g('projectName') && `Project: ${g('projectName')}.`,
+        g('location') && `Location: ${g('location')}.`,
+      ]),
+      A('1.02', 'SECTION INCLUDES', [
+        subDesc,
+        g('enclosureType') &&
+          g('enclosureType') !== 'Open Set' &&
+          `${g('enclosureType')} outdoor enclosure${
+            g('enclosureMaterial') ? ` of ${g('enclosureMaterial').toLowerCase()} construction` : ''
+          }.`,
+        g('fuelType') === 'Diesel' &&
+          g('fuelTank') &&
+          g('fuelTank') !== 'None' &&
+          `Integral sub-base fuel storage tank${
+            g('fuelCapacity') ? `, ${g('fuelCapacity')} gallon` : ''
+          }.`,
+        'Generator-mounted engine controls, instrumentation, and protective devices.',
+        g('mainBreaker') === 'Yes' && 'Generator-mounted main-line overcurrent protective device.',
+        'Starting batteries, battery charger, and ancillary accessories.',
+      ]),
+      A('1.03', 'RELATED REQUIREMENTS', [
+        s.ats === 'Yes'
+          ? 'Section 26 36 00 - Transfer Switches.'
+          : '[Section 26 36 00 - Transfer Switches, if furnished under a separate Section.]',
+        '[Division 23 - Fuel piping and exhaust routing, where applicable.]',
+        '[Division 03 - Concrete housekeeping pad / equipment foundation.]',
+      ]),
+      A('1.04', 'REFERENCES', [
+        'Comply with the latest editions of the following, except as modified herein:',
+        ...standards,
+      ]),
+      A('1.05', 'SUBMITTALS', [
+        'Product Data: Manufacturer data sheets for the generator set and each major component, including ratings, dimensions, weights, and clearances.',
+        'Shop Drawings: Dimensioned plans, elevations, control and power wiring diagrams, and interconnection schedules.',
+        'Certified prototype and production test reports.',
+        g('enclosureType') &&
+          /Sound/.test(g('enclosureType')) &&
+          'Sound performance data, dB(A) at rated load and stated distance.',
+        'Manufacturer factory test report for the furnished unit.',
+        'Operation and Maintenance Manuals.',
+        'Manufacturer warranty documentation.',
+      ]),
+      A('1.06', 'QUALITY ASSURANCE', [
+        'Manufacturer: A firm regularly engaged in manufacturing engine-generator sets, with production under a registered ISO 9001 quality system.',
+        'Source Responsibility: The engine, alternator, controls, enclosure, and fuel tank shall be furnished and warranted by a single manufacturer as a coordinated package.',
+        certs.includes('UL 2200') && 'The complete assembly shall be UL 2200 listed.',
+        nfpa &&
+          nfpa !== 'Not required' &&
+          `The system shall comply with NFPA 110, ${nfpa}.`,
+        g('epaTier') &&
+          g('epaTier') !== 'Not applicable' &&
+          `The engine shall meet applicable U.S. EPA emissions requirements (${g('epaTier')}).`,
+      ]),
+      A('1.07', 'WARRANTY', [
+        g('warranty')
+          ? `Manufacturer's warranty: ${g('warranty')}, covering parts and labor from date of startup or beneficial use.`
+          : "Provide manufacturer's standard warranty covering parts and labor. [SPECIFIER TO DEFINE TERM.]",
+      ]),
+    ],
   }
+
+  const part2 = {
+    heading: 'PART 2 - PRODUCTS',
+    articles: [
+      A('2.01', 'MANUFACTURERS', [
+        `Basis of Design: Blue Star Power Systems${g('model') ? `, Model ${g('model')}` : ''}.`,
+        '[Acceptable manufacturers of equal product, complying with this Section: ____________, ____________.]',
+      ]),
+      A('2.02', 'RATINGS', [
+        `Output: ${output}, ${ratingType} rating.`,
+        elec && `Electrical characteristics: ${elec}.`,
+        !!fla &&
+          `Approximate full-load current: ${fla} amperes${
+            s.ratedAmps ? '' : ' (calculated — verify against alternator data)'
+          }.`,
+        `Suitable for continuous operation in a ${ambient} ambient.`,
+        `Frequency regulation: isochronous; voltage regulation: ${reg} steady-state.`,
+      ]),
+      A('2.03', 'ENGINE', [
+        `Type: ${fuelL}-fueled, ${(g('aspiration') || 'turbocharged').toLowerCase()}, rated for ${
+          kw ? `${kw} kW` : output
+        } at ${rpm}.`,
+        (g('engineMake') || g('engineModel')) &&
+          `Manufacturer / model: ${[g('engineMake'), g('engineModel')].filter(Boolean).join(' ')}.`,
+        `Governor: ${(g('governor') || 'electronic isochronous').toLowerCase()} type.`,
+        `Cooling: unit-mounted radiator with engine-driven fan, sized for the ${ambient} ambient.`,
+        g('jacketHeater') === 'Yes' &&
+          'Jacket-water heater: thermostatically controlled, sized to maintain manufacturer-recommended starting temperature.',
+        'Air cleaner: dry-type, replaceable element.',
+        'Starting: electric starting from the battery system specified herein.',
+      ]),
+      A('2.04', 'ALTERNATOR', [
+        `Type: synchronous, brushless, ${(g('excitation') || 'PMG (Permanent Magnet)').replace(
+          ' (Permanent Magnet)',
+          '',
+        )}-excited, directly coupled to the engine.`,
+        g('alternatorMake') && `Manufacturer: ${g('alternatorMake')}.`,
+        `Insulation: ${g('insulationClass') || 'Class H'}, with temperature rise not exceeding ${
+          g('tempRise') || '105°C'
+        } over a ${ambient} ambient.`,
+        `Voltage regulation: solid-state automatic voltage regulator maintaining ${reg} steady-state from no load to full load.`,
+        'Construction and performance shall comply with NEMA MG-1.',
+      ]),
+      A('2.05', 'CONTROL SYSTEM', [
+        `Furnish a generator-mounted, microprocessor-based control system${
+          g('controller') ? `: ${g('controller')}` : ''
+        }.`,
+        'Provide automatic engine start/stop, voltage regulation, AC/DC metering, and protective relaying.',
+        'Protective shutdowns shall include, at minimum: low oil pressure, high coolant temperature, overspeed, and overcrank.',
+        arr('comms').includes('Remote Annunciator') &&
+          'Provide a remote annunciator with NFPA 110 alarm and status indication.',
+        arr('comms').filter((c) => c !== 'Remote Annunciator').length > 0 &&
+          `Communications interfaces: ${arr('comms')
+            .filter((c) => c !== 'Remote Annunciator')
+            .join(', ')}.`,
+      ]),
+      A('2.06', 'ENCLOSURE', [
+        g('enclosureType') && g('enclosureType') !== 'Open Set'
+          ? `Provide a ${g('enclosureType').toLowerCase()} enclosure${
+              g('enclosureMaterial') ? ` fabricated of ${g('enclosureMaterial').toLowerCase()}` : ''
+            }, with lockable, gasketed access doors.`
+          : 'Provide an open (unhoused) generator set on a structural steel base. [Confirm enclosure requirement.]',
+        g('soundLevel') &&
+          `Sound performance: not to exceed ${g('soundLevel')} dB(A) at 23 feet at rated load.`,
+        'Mount the unit on a structural steel base with integral lifting and anchoring provisions; provide vibration isolation between the set and base.',
+      ]),
+      g('fuelType') === 'Diesel' &&
+        g('fuelTank') &&
+        g('fuelTank') !== 'None' &&
+        A('2.07', 'FUEL SYSTEM', [
+          `Sub-base fuel tank: ${g('fuelTank')}${
+            g('fuelCapacity') ? `, ${g('fuelCapacity')}-gallon usable capacity` : ''
+          }, double-wall with integral secondary containment, UL 142 listed.`,
+          'Provide fuel level gauge, low-fuel and rupture-basin (leak) alarms, supply and return connections, fill, and vent.',
+        ]),
+      A('2.08', 'EXHAUST SYSTEM', [
+        g('exhaust')
+          ? `Provide a ${g('exhaust').toLowerCase()}-grade exhaust silencer with companion flanges, flexible connector, and condensate drain.`
+          : 'Provide an exhaust silencer with companion flanges and flexible connector. [Specify silencer grade.]',
+      ]),
+      g('mainBreaker') === 'Yes' &&
+        A('2.09', 'OVERCURRENT PROTECTION', [
+          `Generator-mounted main-line circuit breaker${
+            g('breakerAmps') ? `, ${g('breakerAmps')} amperes` : ''
+          }${g('breakerPoles') ? `, ${g('breakerPoles')}` : ''}, 100% rated, in a generator-mounted enclosure.`,
+          'Breaker shall be sized and rated for the generator output and available fault current. [Coordinate with short-circuit study.]',
+        ]),
+      A('2.10', 'ACCESSORIES', [
+        `Starting battery system: ${g('battery') || 'lead-acid'}, with rack and cables.`,
+        g('batteryCharger') &&
+          `Battery charger: ${g('batteryCharger')}, with float/equalize control and AC-failure and low-DC alarms.`,
+        'Provide oil and coolant drain extensions, and all manufacturer-standard accessories required for a complete and operable system.',
+      ]),
+    ].filter((a): a is SpecArticle => Boolean(a)),
+  }
+
+  const part3 = {
+    heading: 'PART 3 - EXECUTION',
+    articles: [
+      A('3.01', 'EXAMINATION', [
+        'Verify that the foundation/pad, conduit, fuel piping, and exhaust provisions are complete and correct before setting the unit.',
+      ]),
+      A('3.02', 'INSTALLATION', [
+        'Install in accordance with the manufacturer instructions, NFPA 110, NFPA 37, and the National Electrical Code.',
+        certs.length > 0 || nfpa
+          ? 'Anchor and brace the unit for the applicable seismic and wind loads per the IBC and project structural documents.'
+          : '[Anchor/brace for seismic and wind loads per IBC and structural documents.]',
+        'Provide clearances for airflow, service, and code compliance as shown and as required by the manufacturer.',
+      ]),
+      A('3.03', 'FIELD QUALITY CONTROL', [
+        'Startup shall be performed by a factory-authorized service representative.',
+        `Field test shall verify all protective shutdowns and alarms, voltage and frequency settings, and load performance, including a load-bank test at rated ${
+          g('powerFactor') || '0.8'
+        } power factor.`,
+        'Provide a written field test report.',
+      ]),
+      A('3.04', 'DEMONSTRATION', [
+        'Provide on-site instruction to the Owner in the operation and maintenance of the system.',
+      ]),
+    ],
+  }
+
+  const parts = [part1, part2, part3]
+
+  // Append any imported notes that did not map to a clause.
+  if (g('notes')) {
+    parts[1].articles.push(
+      A('2.11', 'ADDITIONAL FURNISHED ITEMS (PER BASIS OF DESIGN)', [
+        'The following items are included in the basis-of-design quotation:',
+        ...g('notes')
+          .split('\n')
+          .map((n) => n.trim())
+          .filter(Boolean)
+          .filter((n) => !/^Imported from/i.test(n)),
+      ]),
+    )
+  }
+
+  return parts
+}
+
+function buildSpecText(s: SpecState): string {
+  const parts = buildSpec(s)
+  const out: string[] = [
+    'SECTION 26 32 13',
+    'PACKAGED ENGINE GENERATORS',
+    '',
+  ]
+  for (const part of parts) {
+    out.push(part.heading, '')
+    for (const art of part.articles) {
+      out.push(`${art.num}  ${art.title}`)
+      art.clauses.forEach((c, i) => {
+        const letter = String.fromCharCode(65 + i)
+        out.push(`    ${letter}.  ${c}`)
+      })
+      out.push('')
+    }
+  }
+  out.push('END OF SECTION 26 32 13')
   return out.join('\n')
 }
 
 function SpecDocument({ state }: { state: SpecState }) {
-  const fla = (state.ratedAmps as string) || estimateAmps(state)
-  const Row = ({ label, value }: { label: string; value?: string | string[] }) => {
-    const v = Array.isArray(value) ? value.join(', ') : value
-    if (!v) return null
-    return (
-      <div className="flex gap-4 border-b border-gray-100 py-2 text-[14px]">
-        <span className="w-44 shrink-0 text-gray-500">{label}</span>
-        <span className="font-medium text-gray-900">{v}</span>
-      </div>
-    )
-  }
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div className="mb-6">
-      <h3 className="mb-1 text-[12px] font-semibold uppercase tracking-wider text-blue-600">{title}</h3>
-      <div>{children}</div>
-    </div>
-  )
+  const parts = buildSpec(state)
   return (
     <div className="spec-document rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
       <div className="mb-6 flex items-center gap-3 border-b border-gray-100 pb-5">
@@ -550,86 +766,42 @@ function SpecDocument({ state }: { state: SpecState }) {
           <Star className="h-5 w-5 fill-current" />
         </div>
         <div>
-          <div className="text-[17px] font-semibold text-gray-900">Blue Star Power Systems</div>
-          <div className="text-[13px] text-gray-500">Generator Set Specification</div>
+          <div className="text-[17px] font-semibold text-gray-900">Section 26 32 13</div>
+          <div className="text-[13px] text-gray-500">
+            Packaged Engine Generators — Guide Specification (Basis of Design)
+          </div>
         </div>
       </div>
 
-      <Section title="Project">
-        <Row label="Project" value={state.projectName} />
-        <Row label="Location" value={state.location} />
-        <Row label="Spec / Quote #" value={state.specNumber} />
-        <Row label="Date" value={state.date} />
-        <Row label="Engineer" value={state.engineer} />
-        <Row label="Contractor" value={state.contractor} />
-        <Row label="Representative" value={state.rep} />
-        <Row label="Application" value={state.application} />
-      </Section>
-
-      <Section title="Generator Set">
-        <Row label="Model" value={state.model} />
-        <Row label="Fuel" value={state.fuelType} />
-        <Row
-          label="Output"
-          value={state.powerKW ? `${state.powerKW} kW / ${state.powerKVA || '—'} kVA @ ${state.powerFactor} PF` : ''}
-        />
-        <Row label="Voltage" value={state.voltage} />
-        <Row label="Phase / Frequency" value={`${state.phase} · ${state.frequency}`} />
-        <Row label="Rated current" value={fla ? `${fla} A${state.ratedAmps ? '' : ' (est.)'}` : ''} />
-      </Section>
-
-      <Section title="Engine & Alternator">
-        <Row label="Engine" value={[state.engineMake, state.engineModel].filter(Boolean).join(' ')} />
-        <Row label="Governor" value={state.governor} />
-        <Row label="Aspiration" value={state.aspiration} />
-        <Row label="Alternator" value={state.alternatorMake} />
-        <Row label="Insulation" value={state.insulationClass} />
-        <Row label="Temp rise" value={state.tempRise} />
-        <Row label="Excitation" value={state.excitation} />
-        <Row label="Voltage regulation" value={state.voltageReg} />
-        <Row label="Ambient rating" value={state.ambient} />
-      </Section>
-
-      <Section title="Enclosure & Fuel">
-        <Row label="Enclosure" value={state.enclosureType} />
-        <Row label="Material" value={state.enclosureMaterial} />
-        <Row label="Sound level" value={state.soundLevel ? `${state.soundLevel} dB(A) @ 23 ft` : ''} />
-        <Row label="Fuel tank" value={state.fuelTank} />
-        <Row label="Tank capacity" value={state.fuelCapacity ? `${state.fuelCapacity} gal` : ''} />
-        <Row label="Exhaust silencer" value={state.exhaust} />
-      </Section>
-
-      <Section title="Controls & Electrical">
-        <Row label="Controller" value={state.controller} />
-        <Row label="Communications" value={state.comms} />
-        <Row
-          label="Main breaker"
-          value={
-            state.mainBreaker === 'Yes'
-              ? [state.breakerAmps && `${state.breakerAmps}A`, state.breakerPoles].filter(Boolean).join(' ') || 'Yes'
-              : 'None'
-          }
-        />
-        <Row label="Battery charger" value={state.batteryCharger} />
-        <Row label="Jacket water heater" value={state.jacketHeater} />
-        <Row label="Starting battery" value={state.battery} />
-      </Section>
-
-      <Section title="Transfer & Compliance">
-        <Row
-          label="Transfer switch"
-          value={
-            state.ats === 'Yes'
-              ? [state.atsAmps && `${state.atsAmps}A`, state.atsTransition].filter(Boolean).join(' · ') || 'Yes'
-              : 'None'
-          }
-        />
-        <Row label="NFPA 110" value={state.nfpa110} />
-        <Row label="EPA emissions" value={state.epaTier} />
-        <Row label="Warranty" value={state.warranty} />
-        <Row label="Certifications" value={state.certs} />
-        <Row label="Notes" value={state.notes} />
-      </Section>
+      <div className="font-serif text-[13.5px] leading-relaxed text-gray-900">
+        {parts.map((part) => (
+          <div key={part.heading} className="mb-6">
+            <h3 className="mb-3 text-[14px] font-bold tracking-wide text-gray-900">
+              {part.heading}
+            </h3>
+            {part.articles.map((art) => (
+              <div key={art.num} className="mb-4">
+                <div className="mb-1 font-bold text-gray-900">
+                  {art.num}&ensp;{art.title}
+                </div>
+                <div className="space-y-1.5">
+                  {art.clauses.map((c, i) => (
+                    <div key={i} className="flex gap-2 pl-4">
+                      <span className="shrink-0 text-gray-500">
+                        {String.fromCharCode(65 + i)}.
+                      </span>
+                      <span className={EDITORIAL(c) ? 'italic text-amber-700' : ''}>{c}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div className="mt-6 border-t border-gray-100 pt-3 text-[12px] font-bold tracking-wide text-gray-500">
+          END OF SECTION 26 32 13
+        </div>
+      </div>
     </div>
   )
 }
@@ -642,7 +814,12 @@ export function SpecWriter() {
   const [state, setState] = useState<SpecState>(DEFAULTS)
   const [step, setStep] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
   const topRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load persisted draft
   useEffect(() => {
@@ -673,6 +850,42 @@ export function SpecWriter() {
   const go = (next: number) => {
     setStep(next)
     topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const handleQuoteFile = async (file: File | undefined | null) => {
+    if (!file) return
+    setImporting(true)
+    setImportError(null)
+    setImportMsg(null)
+    try {
+      const isPdf =
+        file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf')
+      if (!isPdf) throw new Error('Please upload the Blue Star quote as a PDF.')
+
+      const text = await extractPdfText(file)
+      const parsed = parseBlueStarQuote(text)
+      const count = Number(parsed.__count || 0)
+      delete parsed.__count
+
+      if (count === 0) {
+        throw new Error(
+          "Couldn't recognize this as a Blue Star quote. You can still fill the spec out manually.",
+        )
+      }
+
+      setState((s) => ({ ...s, ...parsed }))
+      setImportMsg(
+        `Imported ${count} field${count === 1 ? '' : 's'}${
+          parsed.specNumber ? ` from quote ${parsed.specNumber}` : ''
+        }. Review every value before issuing.`,
+      )
+      go(STEPS.length)
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Failed to import quote.')
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const specText = useMemo(() => buildSpecText(state), [state])
@@ -717,13 +930,27 @@ export function SpecWriter() {
               <div className="text-[12px] text-gray-500">Generator Set Spec Writer</div>
             </div>
           </div>
-          <button
-            onClick={reset}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium text-gray-500 transition hover:bg-gray-200/60 hover:text-gray-800"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-1.5 rounded-full bg-blue-600 px-3.5 py-1.5 text-[13px] font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              {importing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              Import quote
+            </button>
+            <button
+              onClick={reset}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium text-gray-500 transition hover:bg-gray-200/60 hover:text-gray-800"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          </div>
         </div>
         {/* Progress bar */}
         <div className="h-0.5 w-full bg-gray-200">
@@ -735,6 +962,26 @@ export function SpecWriter() {
       </header>
 
       <main className="mx-auto max-w-3xl px-5 py-8">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => handleQuoteFile(e.target.files?.[0])}
+        />
+
+        {importMsg && (
+          <div className="no-print mb-5 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-[14px] text-green-800">
+            <Check className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{importMsg}</span>
+          </div>
+        )}
+        {importError && (
+          <div className="no-print mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+            {importError}
+          </div>
+        )}
+
         {/* Step pills */}
         <div className="no-print mb-7 flex flex-wrap gap-2">
           {STEPS.map((st, i) => (
@@ -769,9 +1016,10 @@ export function SpecWriter() {
         {isReview ? (
           <>
             <div className="no-print mb-6">
-              <h1 className="text-[28px] font-semibold tracking-tight">Review & export</h1>
+              <h1 className="text-[28px] font-semibold tracking-tight">Engineering specification</h1>
               <p className="mt-1 text-[15px] text-gray-500">
-                Check the specification, then print, copy, or download it.
+                A CSI Section 26 32 13 guide spec generated from your basis of design. Verify every
+                value and edit bracketed items before sealing, then print, copy, or download.
               </p>
             </div>
 
@@ -813,6 +1061,40 @@ export function SpecWriter() {
           </>
         ) : (
           <>
+            {step === 0 && (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragging(true)
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragging(false)
+                  handleQuoteFile(e.dataTransfer.files?.[0])
+                }}
+                className={
+                  'no-print mb-7 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-7 text-center transition ' +
+                  (dragging
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50/40')
+                }
+              >
+                {importing ? (
+                  <Loader2 className="mb-2 h-6 w-6 animate-spin text-blue-600" />
+                ) : (
+                  <Upload className="mb-2 h-6 w-6 text-blue-600" />
+                )}
+                <div className="text-[15px] font-medium text-gray-900">
+                  {importing ? 'Reading quote…' : 'Start from a Blue Star quote'}
+                </div>
+                <div className="mt-0.5 text-[13px] text-gray-500">
+                  Drop the sales-quote PDF here or click to upload — we'll pre-fill the spec as the basis of design.
+                </div>
+              </div>
+            )}
+
             <div className="mb-7">
               <div className="text-[13px] font-medium text-blue-600">
                 Step {step + 1} of {totalSteps}
