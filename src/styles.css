@@ -49,6 +49,21 @@ html {
   transition: background-color 0.3s ease;
 }
 
+/* Print styles for the spec writer */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .spec-document {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}
+
 /* Markdown content styles */
 .prose {
   max-width: none;
