@@ -20,7 +20,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Blue Star Spec Writer',
+        title: "Dillon's Spec Writer",
       },
     ],
     links: [
