@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -429,14 +430,137 @@ function FieldControl({
 /*  Spec document                                                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Nominal line-to-line voltage from a voltage option label. For wye options
+ * (e.g. "208Y/120") the system voltage is the value before the Y; for
+ * split-phase ("120/240") it is the larger of the two; otherwise the lone
+ * number. Parenthetical phase tags are ignored.
+ */
+function nominalVoltage(s: SpecState): number | null {
+  const raw = ((s.voltage as string) || '').replace(/\([^)]*\)/g, '').trim()
+  if (!raw) return null
+  const wye = raw.match(/(\d+(?:\.\d+)?)\s*Y/i)
+  if (wye) return parseFloat(wye[1])
+  const nums = (raw.match(/\d+(?:\.\d+)?/g) || []).map(Number)
+  if (!nums.length) return null
+  return Math.max(...nums)
+}
+
 function estimateAmps(s: SpecState): string | null {
   const kva = parseFloat(s.powerKVA as string)
   if (!kva) return null
-  const v = parseFloat(((s.voltage as string) || '').replace(/[^0-9.].*$/, '').replace(/Y.*/, ''))
+  const v = nominalVoltage(s)
   if (!v) return null
   const threePhase = s.phase === 'Three (3Ø)'
   const amps = threePhase ? (kva * 1000) / (Math.sqrt(3) * v) : (kva * 1000) / v
   return amps.toFixed(0)
+}
+
+interface SpecIssue {
+  severity: 'error' | 'warning'
+  message: string
+}
+
+/**
+ * Cross-check field values for internal contradictions an engineer would
+ * catch on review — overloaded breakers/ATS, voltage/phase mismatches, and
+ * power-rating inconsistencies. Returns an empty list when nothing conflicts.
+ */
+function validateSpec(s: SpecState): SpecIssue[] {
+  const issues: SpecIssue[] = []
+  const num = (k: string) => {
+    const n = parseFloat(s[k] as string)
+    return Number.isFinite(n) ? n : null
+  }
+  const kw = num('powerKW')
+  const kva = num('powerKVA')
+  const pf = num('powerFactor')
+  const threePhase = s.phase === 'Three (3Ø)'
+  const ampsStr = (s.ratedAmps as string) || estimateAmps(s)
+  const fla = ampsStr ? parseFloat(ampsStr) : null
+
+  if (kw && kva && pf) {
+    const expected = kw / pf
+    if (Math.abs(expected - kva) / kva > 0.05) {
+      issues.push({
+        severity: 'warning',
+        message: `kVA (${kva}) and kW (${kw}) disagree at ${pf} power factor — expected ≈ ${expected.toFixed(
+          0,
+        )} kVA. Confirm the rating and power factor.`,
+      })
+    }
+  }
+
+  const voltLabel = (s.voltage as string) || ''
+  if (voltLabel && s.phase) {
+    if (/3Ø/.test(voltLabel) && !threePhase) {
+      issues.push({
+        severity: 'error',
+        message: `Voltage "${voltLabel}" is three-phase but Phase is set to single. Reconcile voltage and phase.`,
+      })
+    }
+    if (/1Ø/.test(voltLabel) && threePhase) {
+      issues.push({
+        severity: 'error',
+        message: `Voltage "${voltLabel}" is single-phase but Phase is set to three. Reconcile voltage and phase.`,
+      })
+    }
+  }
+
+  if (fla && s.mainBreaker === 'Yes') {
+    const bk = num('breakerAmps')
+    if (bk && fla > bk) {
+      issues.push({
+        severity: 'error',
+        message: `Full-load current ≈ ${fla.toFixed(
+          0,
+        )} A exceeds the ${bk} A main breaker. Increase the breaker or change the voltage configuration.`,
+      })
+    }
+  }
+
+  if (fla && s.ats === 'Yes') {
+    const at = num('atsAmps')
+    if (at && fla > at) {
+      issues.push({
+        severity: 'error',
+        message: `Full-load current ≈ ${fla.toFixed(
+          0,
+        )} A exceeds the ${at} A transfer switch. Size the ATS for the generator output.`,
+      })
+    }
+  }
+
+  if (s.mainBreaker === 'Yes' && s.breakerPoles && s.phase) {
+    if (threePhase && s.breakerPoles === '2-pole') {
+      issues.push({
+        severity: 'warning',
+        message: 'Three-phase systems normally use a 3-pole breaker, not 2-pole.',
+      })
+    }
+    if (!threePhase && s.breakerPoles === '3-pole') {
+      issues.push({
+        severity: 'warning',
+        message: 'Single-phase systems normally use a 2-pole breaker, not 3-pole.',
+      })
+    }
+  }
+
+  if (/Sound/.test((s.enclosureType as string) || '') && !(s.soundLevel as string)) {
+    issues.push({
+      severity: 'warning',
+      message: 'Sound-attenuated enclosure selected but no sound level (dB(A)) specified.',
+    })
+  }
+
+  if (s.fuelType === 'Diesel' && (!s.fuelTank || s.fuelTank === 'None')) {
+    issues.push({
+      severity: 'warning',
+      message: 'Diesel set with no sub-base fuel tank — confirm fuel supply and spill containment.',
+    })
+  }
+
+  return issues
 }
 
 interface SpecArticle {
@@ -889,6 +1013,8 @@ export function SpecWriter() {
   }
 
   const specText = useMemo(() => buildSpecText(state), [state])
+  const issues = useMemo(() => validateSpec(state), [state])
+  const errorCount = issues.filter((i) => i.severity === 'error').length
 
   const copy = async () => {
     await navigator.clipboard.writeText(specText)
@@ -1010,6 +1136,11 @@ export function SpecWriter() {
           >
             <FileText className="h-3 w-3" />
             Review
+            {errorCount > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                {errorCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1022,6 +1153,25 @@ export function SpecWriter() {
                 value and edit bracketed items before sealing, then print, copy, or download.
               </p>
             </div>
+
+            {issues.length > 0 && (
+              <div className="no-print mb-6 space-y-2">
+                {issues.map((iss, i) => (
+                  <div
+                    key={i}
+                    className={
+                      'flex items-start gap-2.5 rounded-xl border px-4 py-3 text-[14px] ' +
+                      (iss.severity === 'error'
+                        ? 'border-red-200 bg-red-50 text-red-800'
+                        : 'border-amber-200 bg-amber-50 text-amber-800')
+                    }
+                  >
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{iss.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <SpecDocument state={state} />
 
