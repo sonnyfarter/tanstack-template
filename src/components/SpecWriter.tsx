@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -305,9 +306,10 @@ const STORAGE_KEY = 'bluestar-spec-writer'
 /*  Field controls                                                     */
 /* ------------------------------------------------------------------ */
 
-const labelCls = 'block text-[13px] font-medium text-gray-500 mb-1.5'
+const labelCls =
+  'block font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-dim mb-2'
 const inputCls =
-  'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 placeholder:text-gray-300'
+  'w-full rounded-sm border border-line bg-surface px-3.5 py-2.5 text-[15px] text-ink outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/20 placeholder:text-dim/50'
 
 function FieldControl({
   field,
@@ -320,7 +322,7 @@ function FieldControl({
 }) {
   if (field.type === 'segmented') {
     return (
-      <div className="inline-flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
+      <div className="inline-flex flex-wrap gap-px rounded-sm border border-line bg-line-soft p-px">
         {field.options!.map((opt) => {
           const active = value === opt
           return (
@@ -329,10 +331,10 @@ function FieldControl({
               type="button"
               onClick={() => onChange(opt)}
               className={
-                'rounded-lg px-3.5 py-1.5 text-[14px] font-medium transition ' +
+                'rounded-[3px] px-3.5 py-1.5 text-[14px] font-medium transition ' +
                 (active
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-800')
+                  ? 'bg-ink text-white'
+                  : 'text-ink-soft hover:bg-surface')
               }
             >
               {opt}
@@ -357,10 +359,10 @@ function FieldControl({
                 onChange(active ? arr.filter((x) => x !== opt) : [...arr, opt])
               }
               className={
-                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition ' +
+                'flex items-center gap-1.5 rounded-sm border px-3.5 py-1.5 text-[13px] font-medium transition ' +
                 (active
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300')
+                  ? 'border-amber bg-amber-soft text-amber'
+                  : 'border-line bg-surface text-ink-soft hover:border-dim')
               }
             >
               {active && <Check className="h-3.5 w-3.5" />}
@@ -429,14 +431,137 @@ function FieldControl({
 /*  Spec document                                                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Nominal line-to-line voltage from a voltage option label. For wye options
+ * (e.g. "208Y/120") the system voltage is the value before the Y; for
+ * split-phase ("120/240") it is the larger of the two; otherwise the lone
+ * number. Parenthetical phase tags are ignored.
+ */
+function nominalVoltage(s: SpecState): number | null {
+  const raw = ((s.voltage as string) || '').replace(/\([^)]*\)/g, '').trim()
+  if (!raw) return null
+  const wye = raw.match(/(\d+(?:\.\d+)?)\s*Y/i)
+  if (wye) return parseFloat(wye[1])
+  const nums = (raw.match(/\d+(?:\.\d+)?/g) || []).map(Number)
+  if (!nums.length) return null
+  return Math.max(...nums)
+}
+
 function estimateAmps(s: SpecState): string | null {
   const kva = parseFloat(s.powerKVA as string)
   if (!kva) return null
-  const v = parseFloat(((s.voltage as string) || '').replace(/[^0-9.].*$/, '').replace(/Y.*/, ''))
+  const v = nominalVoltage(s)
   if (!v) return null
   const threePhase = s.phase === 'Three (3Ø)'
   const amps = threePhase ? (kva * 1000) / (Math.sqrt(3) * v) : (kva * 1000) / v
   return amps.toFixed(0)
+}
+
+interface SpecIssue {
+  severity: 'error' | 'warning'
+  message: string
+}
+
+/**
+ * Cross-check field values for internal contradictions an engineer would
+ * catch on review — overloaded breakers/ATS, voltage/phase mismatches, and
+ * power-rating inconsistencies. Returns an empty list when nothing conflicts.
+ */
+function validateSpec(s: SpecState): SpecIssue[] {
+  const issues: SpecIssue[] = []
+  const num = (k: string) => {
+    const n = parseFloat(s[k] as string)
+    return Number.isFinite(n) ? n : null
+  }
+  const kw = num('powerKW')
+  const kva = num('powerKVA')
+  const pf = num('powerFactor')
+  const threePhase = s.phase === 'Three (3Ø)'
+  const ampsStr = (s.ratedAmps as string) || estimateAmps(s)
+  const fla = ampsStr ? parseFloat(ampsStr) : null
+
+  if (kw && kva && pf) {
+    const expected = kw / pf
+    if (Math.abs(expected - kva) / kva > 0.05) {
+      issues.push({
+        severity: 'warning',
+        message: `kVA (${kva}) and kW (${kw}) disagree at ${pf} power factor — expected ≈ ${expected.toFixed(
+          0,
+        )} kVA. Confirm the rating and power factor.`,
+      })
+    }
+  }
+
+  const voltLabel = (s.voltage as string) || ''
+  if (voltLabel && s.phase) {
+    if (/3Ø/.test(voltLabel) && !threePhase) {
+      issues.push({
+        severity: 'error',
+        message: `Voltage "${voltLabel}" is three-phase but Phase is set to single. Reconcile voltage and phase.`,
+      })
+    }
+    if (/1Ø/.test(voltLabel) && threePhase) {
+      issues.push({
+        severity: 'error',
+        message: `Voltage "${voltLabel}" is single-phase but Phase is set to three. Reconcile voltage and phase.`,
+      })
+    }
+  }
+
+  if (fla && s.mainBreaker === 'Yes') {
+    const bk = num('breakerAmps')
+    if (bk && fla > bk) {
+      issues.push({
+        severity: 'error',
+        message: `Full-load current ≈ ${fla.toFixed(
+          0,
+        )} A exceeds the ${bk} A main breaker. Increase the breaker or change the voltage configuration.`,
+      })
+    }
+  }
+
+  if (fla && s.ats === 'Yes') {
+    const at = num('atsAmps')
+    if (at && fla > at) {
+      issues.push({
+        severity: 'error',
+        message: `Full-load current ≈ ${fla.toFixed(
+          0,
+        )} A exceeds the ${at} A transfer switch. Size the ATS for the generator output.`,
+      })
+    }
+  }
+
+  if (s.mainBreaker === 'Yes' && s.breakerPoles && s.phase) {
+    if (threePhase && s.breakerPoles === '2-pole') {
+      issues.push({
+        severity: 'warning',
+        message: 'Three-phase systems normally use a 3-pole breaker, not 2-pole.',
+      })
+    }
+    if (!threePhase && s.breakerPoles === '3-pole') {
+      issues.push({
+        severity: 'warning',
+        message: 'Single-phase systems normally use a 2-pole breaker, not 3-pole.',
+      })
+    }
+  }
+
+  if (/Sound/.test((s.enclosureType as string) || '') && !(s.soundLevel as string)) {
+    issues.push({
+      severity: 'warning',
+      message: 'Sound-attenuated enclosure selected but no sound level (dB(A)) specified.',
+    })
+  }
+
+  if (s.fuelType === 'Diesel' && (!s.fuelTank || s.fuelTank === 'None')) {
+    issues.push({
+      severity: 'warning',
+      message: 'Diesel set with no sub-base fuel tank — confirm fuel supply and spill containment.',
+    })
+  }
+
+  return issues
 }
 
 interface SpecArticle {
@@ -759,38 +884,52 @@ function buildSpecText(s: SpecState): string {
 
 function SpecDocument({ state }: { state: SpecState }) {
   const parts = buildSpec(state)
+  const g = (k: string) => (typeof state[k] === 'string' ? (state[k] as string).trim() : '')
   return (
-    <div className="spec-document rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-      <div className="mb-6 flex items-center gap-3 border-b border-gray-100 pb-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
+    <div className="spec-document rounded-sm border border-line bg-surface p-7 md:p-10">
+      {/* Engineering title block */}
+      <div className="mb-7 flex items-stretch border border-ink">
+        <div className="flex items-center justify-center bg-blue px-4 text-white">
           <Star className="h-5 w-5 fill-current" />
         </div>
-        <div>
-          <div className="text-[17px] font-semibold text-gray-900">Section 26 32 13</div>
-          <div className="text-[13px] text-gray-500">
-            Packaged Engine Generators — Guide Specification (Basis of Design)
+        <div className="flex-1 px-4 py-3">
+          <div className="font-display text-[22px] font-bold uppercase leading-none tracking-[0.02em] text-ink">
+            Section 26&nbsp;32&nbsp;13
+          </div>
+          <div className="mt-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-dim">
+            Packaged Engine Generators · Guide Spec · Basis of Design
+          </div>
+        </div>
+        <div className="hidden flex-col justify-center border-l border-ink px-4 py-2 text-right sm:flex">
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-dim">
+            {g('specNumber') ? 'BOD Ref' : 'Date'}
+          </div>
+          <div className="font-mono text-[13px] font-semibold text-ink">
+            {g('specNumber') || g('date') || '—'}
           </div>
         </div>
       </div>
 
-      <div className="font-serif text-[13.5px] leading-relaxed text-gray-900">
+      <div className="font-serif text-[13.5px] leading-relaxed text-ink">
         {parts.map((part) => (
-          <div key={part.heading} className="mb-6">
-            <h3 className="mb-3 text-[14px] font-bold tracking-wide text-gray-900">
+          <div key={part.heading} className="mb-7">
+            <h3 className="mb-3 flex items-center gap-2 border-b border-line pb-1.5 font-display text-[17px] font-bold uppercase tracking-[0.04em] text-blue">
+              <span className="inline-block h-3 w-1 bg-amber" />
               {part.heading}
             </h3>
             {part.articles.map((art) => (
               <div key={art.num} className="mb-4">
-                <div className="mb-1 font-bold text-gray-900">
-                  {art.num}&ensp;{art.title}
+                <div className="mb-1.5 flex gap-2 font-semibold text-ink">
+                  <span className="font-mono text-[12.5px] text-amber">{art.num}</span>
+                  <span className="font-display uppercase tracking-[0.02em]">{art.title}</span>
                 </div>
                 <div className="space-y-1.5">
                   {art.clauses.map((c, i) => (
-                    <div key={i} className="flex gap-2 pl-4">
-                      <span className="shrink-0 text-gray-500">
+                    <div key={i} className="flex gap-2.5 pl-4">
+                      <span className="shrink-0 font-mono text-[11px] text-dim">
                         {String.fromCharCode(65 + i)}.
                       </span>
-                      <span className={EDITORIAL(c) ? 'italic text-amber-700' : ''}>{c}</span>
+                      <span className={EDITORIAL(c) ? 'italic text-amber' : ''}>{c}</span>
                     </div>
                   ))}
                 </div>
@@ -798,8 +937,8 @@ function SpecDocument({ state }: { state: SpecState }) {
             ))}
           </div>
         ))}
-        <div className="mt-6 border-t border-gray-100 pt-3 text-[12px] font-bold tracking-wide text-gray-500">
-          END OF SECTION 26 32 13
+        <div className="mt-6 border-t border-ink pt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">
+          End of Section 26&nbsp;32&nbsp;13
         </div>
       </div>
     </div>
@@ -889,6 +1028,8 @@ export function SpecWriter() {
   }
 
   const specText = useMemo(() => buildSpecText(state), [state])
+  const issues = useMemo(() => validateSpec(state), [state])
+  const errorCount = issues.filter((i) => i.severity === 'error').length
 
   const copy = async () => {
     await navigator.clipboard.writeText(specText)
@@ -915,26 +1056,30 @@ export function SpecWriter() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] text-gray-900">
+    <div className="min-h-screen bp-grid text-ink">
       <div ref={topRef} />
 
-      {/* Header */}
-      <header className="no-print sticky top-0 z-10 border-b border-gray-200/70 bg-[#f5f5f7]/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+      {/* Masthead — engineering title block */}
+      <header className="no-print sticky top-0 z-10 border-b border-line bg-surface/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <div className="reg-ticks flex h-9 w-9 items-center justify-center bg-blue text-white">
               <Star className="h-4 w-4 fill-current" />
             </div>
-            <div className="leading-tight">
-              <div className="text-[15px] font-semibold">Blue Star Power Systems</div>
-              <div className="text-[12px] text-gray-500">Generator Set Spec Writer</div>
+            <div className="leading-none">
+              <div className="font-display text-[20px] font-bold uppercase tracking-[0.04em] text-ink">
+                Blue&nbsp;Star <span className="text-amber">/</span> Spec&nbsp;Writer
+              </div>
+              <div className="mt-1 font-mono text-[10.5px] uppercase tracking-[0.18em] text-dim">
+                Sec 26&nbsp;32&nbsp;13 — Packaged Engine Generators
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="flex items-center gap-1.5 rounded-full bg-blue-600 px-3.5 py-1.5 text-[13px] font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-sm bg-amber px-3.5 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-white transition hover:brightness-110 disabled:opacity-60"
             >
               {importing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -945,17 +1090,17 @@ export function SpecWriter() {
             </button>
             <button
               onClick={reset}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium text-gray-500 transition hover:bg-gray-200/60 hover:text-gray-800"
+              className="flex items-center gap-1.5 rounded-sm border border-line px-3 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-dim transition hover:border-dim hover:text-ink"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset
             </button>
           </div>
         </div>
-        {/* Progress bar */}
-        <div className="h-0.5 w-full bg-gray-200">
+        {/* Progress rule */}
+        <div className="h-[3px] w-full bg-line-soft">
           <div
-            className="h-full bg-blue-600 transition-all duration-500"
+            className="h-full bg-amber transition-all duration-500"
             style={{ width: `${isReview ? 100 : progress}%` }}
           />
         </div>
@@ -971,32 +1116,33 @@ export function SpecWriter() {
         />
 
         {importMsg && (
-          <div className="no-print mb-5 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-[14px] text-green-800">
-            <Check className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="no-print mb-5 flex items-start gap-2.5 rounded-sm border border-l-[3px] border-line border-l-blue bg-surface px-4 py-3 text-[14px] text-ink-soft">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue" />
             <span>{importMsg}</span>
           </div>
         )}
         {importError && (
-          <div className="no-print mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+          <div className="no-print mb-5 rounded-sm border border-l-[3px] border-danger-soft border-l-danger bg-danger-soft px-4 py-3 text-[14px] text-danger">
             {importError}
           </div>
         )}
 
-        {/* Step pills */}
-        <div className="no-print mb-7 flex flex-wrap gap-2">
+        {/* Step index */}
+        <div className="no-print mb-7 flex flex-wrap gap-1.5">
           {STEPS.map((st, i) => (
             <button
               key={st.id}
               onClick={() => go(i)}
               className={
-                'flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition ' +
+                'flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.08em] transition ' +
                 (i === step
-                  ? 'bg-blue-600 text-white'
+                  ? 'border-ink bg-ink text-white'
                   : i < step || isReview
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-200/70 text-gray-500 hover:bg-gray-200')
+                    ? 'border-line bg-surface text-blue hover:border-blue'
+                    : 'border-transparent bg-line-soft text-dim hover:bg-line')
               }
             >
+              <span className="tabular-nums opacity-60">{String(i + 1).padStart(2, '0')}</span>
               {(i < step || isReview) && <Check className="h-3 w-3" />}
               {st.title}
             </button>
@@ -1004,45 +1150,92 @@ export function SpecWriter() {
           <button
             onClick={() => go(totalSteps)}
             className={
-              'flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition ' +
-              (isReview ? 'bg-blue-600 text-white' : 'bg-gray-200/70 text-gray-500 hover:bg-gray-200')
+              'flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.08em] transition ' +
+              (isReview
+                ? 'border-ink bg-ink text-white'
+                : 'border-transparent bg-line-soft text-dim hover:bg-line')
             }
           >
             <FileText className="h-3 w-3" />
             Review
+            {errorCount > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-sm bg-danger px-1 text-[10px] font-semibold text-white">
+                {errorCount}
+              </span>
+            )}
           </button>
         </div>
 
         {isReview ? (
           <>
             <div className="no-print mb-6">
-              <h1 className="text-[28px] font-semibold tracking-tight">Engineering specification</h1>
-              <p className="mt-1 text-[15px] text-gray-500">
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-amber">
+                Output
+              </div>
+              <h1 className="mt-1 font-display text-[34px] font-bold uppercase leading-none tracking-[0.01em]">
+                Engineering Specification
+              </h1>
+              <p className="mt-2 max-w-xl text-[15px] text-dim">
                 A CSI Section 26 32 13 guide spec generated from your basis of design. Verify every
                 value and edit bracketed items before sealing, then print, copy, or download.
               </p>
             </div>
 
+            {issues.length > 0 && (
+              <div className="no-print mb-6 overflow-hidden rounded-sm border border-line bg-surface">
+                <div className="flex items-center justify-between border-b border-line bg-line-soft px-4 py-2">
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
+                    Design check
+                  </span>
+                  <span className="font-mono text-[11px] tracking-[0.08em] text-dim">
+                    {issues.filter((i) => i.severity === 'error').length} ERR ·{' '}
+                    {issues.filter((i) => i.severity === 'warning').length} WARN
+                  </span>
+                </div>
+                <div className="divide-y divide-line-soft">
+                  {issues.map((iss, i) => (
+                    <div
+                      key={i}
+                      className={
+                        'flex items-start gap-3 border-l-[3px] px-4 py-3 text-[14px] ' +
+                        (iss.severity === 'error'
+                          ? 'border-l-danger bg-danger-soft/40 text-ink'
+                          : 'border-l-amber bg-amber-soft/40 text-ink')
+                      }
+                    >
+                      <AlertTriangle
+                        className={
+                          'mt-0.5 h-4 w-4 shrink-0 ' +
+                          (iss.severity === 'error' ? 'text-danger' : 'text-amber')
+                        }
+                      />
+                      <span>{iss.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <SpecDocument state={state} />
 
-            <div className="no-print mt-6 flex flex-wrap gap-3">
+            <div className="no-print mt-6 flex flex-wrap gap-2">
               <button
                 onClick={() => window.print()}
-                className="flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-[15px] font-medium text-white transition hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-sm bg-blue px-5 py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-ink"
               >
                 <Printer className="h-4 w-4" />
                 Print / Save PDF
               </button>
               <button
                 onClick={copy}
-                className="flex items-center gap-2 rounded-full border border-gray-300 bg-white px-5 py-2.5 text-[15px] font-medium text-gray-700 transition hover:bg-gray-50"
+                className="flex items-center gap-2 rounded-sm border border-line bg-surface px-5 py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-soft transition hover:border-dim"
               >
-                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-blue" /> : <Copy className="h-4 w-4" />}
                 {copied ? 'Copied' : 'Copy text'}
               </button>
               <button
                 onClick={download}
-                className="flex items-center gap-2 rounded-full border border-gray-300 bg-white px-5 py-2.5 text-[15px] font-medium text-gray-700 transition hover:bg-gray-50"
+                className="flex items-center gap-2 rounded-sm border border-line bg-surface px-5 py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-soft transition hover:border-dim"
               >
                 <Download className="h-4 w-4" />
                 Download
@@ -1052,7 +1245,7 @@ export function SpecWriter() {
             <div className="no-print mt-6">
               <button
                 onClick={() => go(totalSteps - 1)}
-                className="flex items-center gap-1.5 text-[15px] font-medium text-blue-600 hover:underline"
+                className="flex items-center gap-1.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-blue hover:text-amber"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back to editing
@@ -1075,35 +1268,37 @@ export function SpecWriter() {
                   handleQuoteFile(e.dataTransfer.files?.[0])
                 }}
                 className={
-                  'no-print mb-7 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-7 text-center transition ' +
+                  'no-print mb-7 flex cursor-pointer flex-col items-center justify-center rounded-sm border border-dashed px-6 py-8 text-center transition ' +
                   (dragging
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50/40')
+                    ? 'border-amber bg-amber-soft/40'
+                    : 'border-line bg-surface hover:border-amber hover:bg-amber-soft/20')
                 }
               >
                 {importing ? (
-                  <Loader2 className="mb-2 h-6 w-6 animate-spin text-blue-600" />
+                  <Loader2 className="mb-2 h-6 w-6 animate-spin text-amber" />
                 ) : (
-                  <Upload className="mb-2 h-6 w-6 text-blue-600" />
+                  <Upload className="mb-2 h-6 w-6 text-amber" />
                 )}
-                <div className="text-[15px] font-medium text-gray-900">
+                <div className="text-[15px] font-semibold text-ink">
                   {importing ? 'Reading quote…' : 'Start from a Blue Star quote'}
                 </div>
-                <div className="mt-0.5 text-[13px] text-gray-500">
+                <div className="mt-1 text-[13px] text-dim">
                   Drop the sales-quote PDF here or click to upload — we'll pre-fill the spec as the basis of design.
                 </div>
               </div>
             )}
 
-            <div className="mb-7">
-              <div className="text-[13px] font-medium text-blue-600">
-                Step {step + 1} of {totalSteps}
+            <div key={`h${step}`} className="rise-in mb-7 border-l-[3px] border-amber pl-4">
+              <div className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-dim">
+                Step {String(step + 1).padStart(2, '0')} / {String(totalSteps).padStart(2, '0')}
               </div>
-              <h1 className="mt-1 text-[28px] font-semibold tracking-tight">{STEPS[step].title}</h1>
-              <p className="mt-1 text-[15px] text-gray-500">{STEPS[step].subtitle}</p>
+              <h1 className="mt-1.5 font-display text-[34px] font-bold uppercase leading-none tracking-[0.01em]">
+                {STEPS[step].title}
+              </h1>
+              <p className="mt-2 text-[15px] text-dim">{STEPS[step].subtitle}</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
+            <div key={`g${step}`} className="rise-in grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
               {STEPS[step].fields
                 .filter((f) => !f.showIf || f.showIf(state))
                 .map((field) => (
@@ -1114,24 +1309,24 @@ export function SpecWriter() {
                       value={state[field.key] ?? (field.type === 'multiselect' ? [] : '')}
                       onChange={(v) => set(field.key, v)}
                     />
-                    {field.help && <p className="mt-1.5 text-[12px] text-gray-400">{field.help}</p>}
+                    {field.help && <p className="mt-1.5 text-[12px] text-dim/80">{field.help}</p>}
                   </div>
                 ))}
             </div>
 
             {/* Nav */}
-            <div className="mt-9 flex items-center justify-between border-t border-gray-200 pt-5">
+            <div className="mt-9 flex items-center justify-between border-t border-line pt-5">
               <button
                 onClick={() => go(Math.max(0, step - 1))}
                 disabled={step === 0}
-                className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[15px] font-medium text-gray-600 transition hover:bg-gray-200/60 disabled:opacity-0"
+                className="flex items-center gap-1.5 rounded-sm px-4 py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-dim transition hover:text-ink disabled:opacity-0"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </button>
               <button
                 onClick={() => go(step + 1)}
-                className="flex items-center gap-2 rounded-full bg-blue-600 px-6 py-2.5 text-[15px] font-medium text-white transition hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-sm bg-blue px-6 py-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-ink"
               >
                 {step === totalSteps - 1 ? 'Review spec' : 'Continue'}
                 <ArrowRight className="h-4 w-4" />
