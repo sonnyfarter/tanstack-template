@@ -109,6 +109,24 @@ const num = (s: string): string => {
   return m ? m[0] : ''
 }
 
+/**
+ * Lead time for the generator set. Quotes can list a separate ATS lead time;
+ * this picks the genset/overall lead time from the pricing block and skips any
+ * line scoped to the ATS so we never report the ATS lead time by mistake.
+ * Line-scoped so it returns just "32 Weeks (…)" rather than spilling into the
+ * Terms & Conditions that follow it.
+ */
+function generatorLeadTime(text: string): string {
+  const leadLines = text.split('\n').filter((l) => /lead\s*time/i.test(l))
+  if (!leadLines.length) return ''
+  const nonAts = leadLines.filter((l) => !/\bats\b/i.test(l))
+  const pick = nonAts[0] ?? leadLines[0]
+  return pick
+    .replace(/.*?lead\s*time[:\s]*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function mapVoltage(v: string): string {
   const s = v.replace(/\s/g, '')
   if (/480.*277|277.*480/.test(s)) return '480Y/277 (3Ø)'
@@ -292,7 +310,8 @@ export function parseBlueStarQuote(text: string): SpecValues {
   add('Enclosure Accessories:', 'Enclosure accessories')
   add('Battery:', 'Battery')
   add('Paint Color:', 'Paint')
-  add('Lead Time', 'Lead time')
+  const lead = generatorLeadTime(text)
+  if (lead) extras.push(`Generator lead time: ${lead}`)
   add('Total Price', 'Total price')
   if (extras.length) set('notes', extras.join('\n'))
 
