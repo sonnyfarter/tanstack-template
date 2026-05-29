@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "last_full_scan": null,
+    "total_opportunities": 0,
+    "total_scans": 0,
+    "source_hit_rates": {}
+  },
+  "opportunities": [],
+  "learning": {
+    "productive_sources": [],
+    "dead_sources": [],
+    "keyword_effectiveness": {},
+    "tier_recommendations": {}
+  },
+  "opportunity_record_template": {
+    "id": "string (uuid or hash of title+entity+due_date)",
+    "title": "string",
+    "entity": "string (issuing municipality/agency)",
+    "source": "string (which source key in sources.json found it)",
+    "source_url": "string",
+    "found_date": "YYYY-MM-DD",
+    "due_date": "YYYY-MM-DD or null",
+    "status": "OPEN | CLOSED | AWARDED | CANCELLED",
+    "bid_type": "one of keywords.json.bid_types",
+    "description": "string",
+    "contact": {
+      "name": "string",
+      "email": "string",
+      "phone": "string"
+    },
+    "estimated_value": "number | null",
+    "gc": "string (general contractor, if known)",
+    "owner": "string",
+    "plans_available": "boolean",
+    "urgency": "URGENT (<=7d) | NEAR (<=30d) | NORMAL",
+    "notes": "string",
+    "history": [
+      {
+        "scanned_at": "ISO timestamp",
+        "changes": "string (e.g., 'addendum posted', 'due date extended')"
+      }
+    ]
+  }
+}
