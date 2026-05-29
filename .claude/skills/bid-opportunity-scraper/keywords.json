@@ -1,0 +1,41 @@
+{
+  "primary_keywords": [
+    "generator",
+    "genset",
+    "standby power",
+    "emergency power",
+    "backup power",
+    "automatic transfer switch",
+    "ATS",
+    "transfer switch",
+    "preventive maintenance generator",
+    "PM contract generator",
+    "UPS",
+    "uninterruptible power",
+    "load bank",
+    "load test",
+    "NFPA 110",
+    "fuel system",
+    "day tank",
+    "switchgear",
+    "paralleling"
+  ],
+  "bid_types": [
+    "NEW_INSTALL",
+    "REPLACEMENT",
+    "PM_CONTRACT",
+    "REPAIR",
+    "DEMO",
+    "ATS",
+    "UPS",
+    "FUEL_SYSTEM",
+    "LOAD_TEST",
+    "MULTI_TRADE"
+  ],
+  "false_positive_exclusions": [
+    "solar panel",
+    "photovoltaic only",
+    "solar array"
+  ],
+  "notes": "A bid for 'solar panel installation' is NOT relevant just because it mentions 'electrical.' Only flag bids where generator/power systems are part of the scope."
+}
