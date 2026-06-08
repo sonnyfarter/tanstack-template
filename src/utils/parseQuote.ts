@@ -109,6 +109,30 @@ const num = (s: string): string => {
   return m ? m[0] : ''
 }
 
+/**
+ * Lead time for the generator set. Quotes can list a separate ATS lead time;
+ * this anchors to the PRICING INFORMATION block (where the genset / overall
+ * lead time lives in Blue Star's template) and skips any line scoped to the
+ * ATS or transfer switch — including "ATS-1" / "ATS1" forms where the word
+ * boundary fails — so we never report the ATS lead time by mistake.
+ * Line-scoped so it returns just "32 Weeks (…)" rather than spilling into the
+ * Terms & Conditions that follow it.
+ */
+function generatorLeadTime(text: string): string {
+  const pricingIdx = text.indexOf('PRICING INFORMATION')
+  const scope = pricingIdx === -1 ? text : text.slice(pricingIdx)
+  const isAts = (l: string) =>
+    /\b(ats|transfer\s*switch)\b/i.test(l) || /ats[-\d]/i.test(l)
+  const leadLines = scope.split('\n').filter((l) => /lead\s*time/i.test(l))
+  if (!leadLines.length) return ''
+  const nonAts = leadLines.filter((l) => !isAts(l))
+  const pick = nonAts[0] ?? leadLines[0]
+  return pick
+    .replace(/.*?lead\s*time[:\s]*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function mapVoltage(v: string): string {
   const s = v.replace(/\s/g, '')
   if (/480.*277|277.*480/.test(s)) return '480Y/277 (3Ø)'
@@ -275,6 +299,16 @@ export function parseBlueStarQuote(text: string): SpecValues {
   if (/yes/i.test(field(text, 'CSA Approved:'))) certs.push('CSA')
   if (certs.length) set('certs', certs)
 
+  // An ATS shows up in the pricing block as a separate priced line item
+  // (e.g. "ATS 1 Price"). Flag the transfer switch on the spec so Article 1.03
+  // (Related Requirements) references Section 26 36 00.
+  if (/\bATS\b[^\n]*\bPrice\b/i.test(text)) set('ats', 'Yes')
+
+  // Insulation class is often mentioned in the alternator/gen line; pick it up
+  // if present so the alternator article doesn't fall back to the default.
+  if (/\bClass\s*F\b/i.test(text)) set('insulationClass', 'Class F')
+  else if (/\bClass\s*H\b/i.test(text)) set('insulationClass', 'Class H')
+
   // --- Notes: capture items that don't map to a dedicated field ---
   const extras: string[] = []
   const add = (label: string, prefix: string) => {
@@ -292,7 +326,11 @@ export function parseBlueStarQuote(text: string): SpecValues {
   add('Enclosure Accessories:', 'Enclosure accessories')
   add('Battery:', 'Battery')
   add('Paint Color:', 'Paint')
-  add('Lead Time', 'Lead time')
+  add('Unit Color:', 'Unit color')
+  add('Factory Test:', 'Factory test')
+  add("Owner's Manual:", "Owner's manual")
+  const lead = generatorLeadTime(text)
+  if (lead) extras.push(`Generator lead time: ${lead}`)
   add('Total Price', 'Total price')
   if (extras.length) set('notes', extras.join('\n'))
 
