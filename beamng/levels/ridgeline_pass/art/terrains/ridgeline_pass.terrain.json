@@ -1,0 +1,57 @@
+{
+  "alpine_grass": {
+    "name": "alpine_grass",
+    "class": "TerrainMaterial",
+    "internalName": "alpine_grass",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_alpine_grass_b.color.png",
+    "normalMap": "/levels/ridgeline_pass/art/terrains/t_alpine_grass_b.normal.png",
+    "roughnessMap": "/levels/ridgeline_pass/art/terrains/t_alpine_grass_b.data.png",
+    "detailMap": "/levels/ridgeline_pass/art/terrains/t_grass_detail.png",
+    "detailSize": 4.0,
+    "detailStrength": 0.65,
+    "macroSize": 96.0,
+    "macroStrength": 0.4,
+    "useSideProjection": false
+  },
+  "mountain_dirt": {
+    "name": "mountain_dirt",
+    "class": "TerrainMaterial",
+    "internalName": "mountain_dirt",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_dirt_b.color.png",
+    "normalMap": "/levels/ridgeline_pass/art/terrains/t_dirt_b.normal.png",
+    "roughnessMap": "/levels/ridgeline_pass/art/terrains/t_dirt_b.data.png",
+    "detailSize": 3.0,
+    "detailStrength": 0.7,
+    "macroSize": 80.0,
+    "macroStrength": 0.45,
+    "useSideProjection": false
+  },
+  "gravel_pass": {
+    "name": "gravel_pass",
+    "class": "TerrainMaterial",
+    "internalName": "gravel_pass",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_gravel_b.color.png",
+    "normalMap": "/levels/ridgeline_pass/art/terrains/t_gravel_b.normal.png",
+    "roughnessMap": "/levels/ridgeline_pass/art/terrains/t_gravel_b.data.png",
+    "detailSize": 2.0,
+    "detailStrength": 0.8,
+    "macroSize": 60.0,
+    "macroStrength": 0.35,
+    "useSideProjection": false
+  },
+  "rock_cliff": {
+    "name": "rock_cliff",
+    "class": "TerrainMaterial",
+    "internalName": "rock_cliff",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_rock_b.color.png",
+    "normalMap": "/levels/ridgeline_pass/art/terrains/t_rock_b.normal.png",
+    "roughnessMap": "/levels/ridgeline_pass/art/terrains/t_rock_b.data.png",
+    "detailSize": 5.0,
+    "detailStrength": 0.5,
+    "macroSize": 120.0,
+    "macroStrength": 0.55,
+    "useSideProjection": true,
+    "sideProjectionStartAngle": 38.0,
+    "sideProjectionEndAngle": 52.0
+  }
+}

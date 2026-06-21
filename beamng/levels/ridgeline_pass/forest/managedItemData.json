@@ -1,0 +1,71 @@
+{
+  "pine_tall_a": {
+    "name": "pine_tall_a",
+    "class": "TSForestItemData",
+    "internalName": "pine_tall_a",
+    "shapeFile": "/levels/ridgeline_pass/art/shapes/trees/pine_tall_a.dae",
+    "branchAmp": 0.04,
+    "detailAmp": 0.06,
+    "detailFreq": 0.12,
+    "windScale": 1.0,
+    "trunkBendScale": 0.012,
+    "radius": 0.55,
+    "mass": 600.0,
+    "rigidity": 14.0,
+    "tightnessCoefficient": 0.4,
+    "dampingCoefficient": 0.7,
+    "collidable": true
+  },
+  "pine_tall_b": {
+    "name": "pine_tall_b",
+    "class": "TSForestItemData",
+    "internalName": "pine_tall_b",
+    "shapeFile": "/levels/ridgeline_pass/art/shapes/trees/pine_tall_b.dae",
+    "branchAmp": 0.05,
+    "detailAmp": 0.07,
+    "detailFreq": 0.14,
+    "windScale": 1.0,
+    "trunkBendScale": 0.014,
+    "radius": 0.5,
+    "mass": 520.0,
+    "rigidity": 12.0,
+    "collidable": true
+  },
+  "pine_young": {
+    "name": "pine_young",
+    "class": "TSForestItemData",
+    "internalName": "pine_young",
+    "shapeFile": "/levels/ridgeline_pass/art/shapes/trees/pine_young.dae",
+    "branchAmp": 0.08,
+    "detailAmp": 0.1,
+    "windScale": 1.0,
+    "radius": 0.3,
+    "mass": 180.0,
+    "rigidity": 8.0,
+    "collidable": true
+  },
+  "alpine_shrub": {
+    "name": "alpine_shrub",
+    "class": "TSForestItemData",
+    "internalName": "alpine_shrub",
+    "shapeFile": "/levels/ridgeline_pass/art/shapes/trees/alpine_shrub.dae",
+    "branchAmp": 0.12,
+    "detailAmp": 0.15,
+    "windScale": 1.2,
+    "radius": 0.45,
+    "mass": 30.0,
+    "rigidity": 3.0,
+    "collidable": false
+  },
+  "boulder_cluster": {
+    "name": "boulder_cluster",
+    "class": "TSForestItemData",
+    "internalName": "boulder_cluster",
+    "shapeFile": "/levels/ridgeline_pass/art/shapes/rock_medium.dae",
+    "windScale": 0.0,
+    "radius": 1.4,
+    "mass": 4000.0,
+    "rigidity": 1000.0,
+    "collidable": true
+  }
+}
