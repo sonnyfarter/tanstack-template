@@ -31,6 +31,9 @@ beamng/
 
 ## First load — import the terrain (~1 minute, one time)
 
+> 📋 **For the foolproof, click-by-click version with troubleshooting, see
+> [`levels/ridgeline_pass/LOADING.md`](levels/ridgeline_pass/LOADING.md).**
+
 Custom terrain in BeamNG is a baked binary (`.ter`) that the editor generates
 from a heightmap. This kit ships the heightmap; you bake it once:
 
