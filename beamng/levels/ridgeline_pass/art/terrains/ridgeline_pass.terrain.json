@@ -1,0 +1,40 @@
+{
+  "alpine_grass": {
+    "name": "alpine_grass",
+    "class": "TerrainMaterial",
+    "internalName": "alpine_grass",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_alpine_grass.color.png",
+    "baseColorMap": "/levels/ridgeline_pass/art/terrains/t_alpine_grass.color.png",
+    "diffuseSize": 8.0,
+    "useSideProjection": false
+  },
+  "mountain_dirt": {
+    "name": "mountain_dirt",
+    "class": "TerrainMaterial",
+    "internalName": "mountain_dirt",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_dirt.color.png",
+    "baseColorMap": "/levels/ridgeline_pass/art/terrains/t_dirt.color.png",
+    "diffuseSize": 7.0,
+    "useSideProjection": false
+  },
+  "gravel_pass": {
+    "name": "gravel_pass",
+    "class": "TerrainMaterial",
+    "internalName": "gravel_pass",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_gravel.color.png",
+    "baseColorMap": "/levels/ridgeline_pass/art/terrains/t_gravel.color.png",
+    "diffuseSize": 5.0,
+    "useSideProjection": false
+  },
+  "rock_cliff": {
+    "name": "rock_cliff",
+    "class": "TerrainMaterial",
+    "internalName": "rock_cliff",
+    "diffuseMap": "/levels/ridgeline_pass/art/terrains/t_rock.color.png",
+    "baseColorMap": "/levels/ridgeline_pass/art/terrains/t_rock.color.png",
+    "diffuseSize": 9.0,
+    "useSideProjection": true,
+    "sideProjectionStartAngle": 38.0,
+    "sideProjectionEndAngle": 52.0
+  }
+}
