@@ -1,7 +1,7 @@
 {
   "title": "Ridgeline Pass",
   "description": "A brand-new off-road mountain environment: a high alpine basin ringed by jagged peaks with a winding gravel pass carved through a central valley. Climb the ridges, crawl the rock shelves, and run the forest trails.",
-  "previews": ["ridgeline_pass_preview.jpg"],
+  "previews": ["ridgeline_pass_preview.png"],
   "size": [1024, 1024],
   "country": "USA",
   "biome": "Alpine / Mountains",
@@ -9,20 +9,8 @@
   "suitablefor": ["offroad", "rockcrawling", "rally", "freeroam"],
   "defaultSpawnPointName": "spawn_trailhead",
   "spawnPoints": [
-    {
-      "objectname": "spawn_trailhead",
-      "translationId": "Trailhead",
-      "previews": ["spawn_trailhead.jpg"]
-    },
-    {
-      "objectname": "spawn_summit",
-      "translationId": "Summit Overlook",
-      "previews": ["spawn_summit.jpg"]
-    },
-    {
-      "objectname": "spawn_valley",
-      "translationId": "Valley Floor",
-      "previews": ["spawn_valley.jpg"]
-    }
+    { "objectname": "spawn_trailhead", "translationId": "Trailhead" },
+    { "objectname": "spawn_summit", "translationId": "Summit Overlook" },
+    { "objectname": "spawn_valley", "translationId": "Valley Floor" }
   ]
 }
