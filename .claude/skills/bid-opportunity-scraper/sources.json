@@ -1,0 +1,208 @@
+{
+  "aggregators": [
+    {
+      "key": "scbo",
+      "name": "SCBO (SC Business Opportunities)",
+      "url": "https://scbo.sc.gov/online-edition",
+      "search_terms": ["generator", "transfer switch", "emergency power", "standby", "UPS"],
+      "notes": "Highest-ROI single source. Extract: title, issuing entity, due date, description, contact info."
+    },
+    {
+      "key": "sfaa",
+      "name": "SFAA MMO Solicitations",
+      "url": "http://webprod.cio.sc.gov/SCSolicitationWeb/solicitationSearch.do?searchgroup=MMO&searchstatus=O&searchlimit=500&btnSearch=on",
+      "search_terms": ["generator", "power", "emergency"]
+    },
+    {
+      "key": "sc_procurement",
+      "name": "SC Procurement (state)",
+      "url": "https://procurement.sc.gov/"
+    },
+    {
+      "key": "sc_procurement_awards",
+      "name": "SC Procurement - Contract Awards",
+      "url": "https://procurement.sc.gov/vendor/contract-awards"
+    },
+    {
+      "key": "scbids",
+      "name": "SCBids",
+      "url": "https://www.southcarolinabids.us/"
+    },
+    {
+      "key": "findrfp",
+      "name": "FindRFP (SC / generator prefiltered)",
+      "url": "https://www.findrfp.com/service/search.aspx?t=SC&s=generator",
+      "notes": "Pre-filtered for SC generators — just extract results."
+    },
+    {
+      "key": "vendor_registry",
+      "name": "Vendor Registry (BuyerId 4349e3d2)",
+      "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=4349e3d2-685e-4b15-9530-e9ae2ea4cb04"
+    },
+    {
+      "key": "mount_pleasant_waterworks",
+      "name": "Mount Pleasant Water Works",
+      "url": "https://www.mountpleasantwaterworks.com/contact-us/bids-and-procurement"
+    },
+    {
+      "key": "public_purchase",
+      "name": "Public Purchase",
+      "url": "https://www.publicpurchase.com/",
+      "notes": "Search SC + generator keywords."
+    }
+  ],
+
+  "authenticated_platforms": [
+    {
+      "key": "constructconnect",
+      "name": "ConstructConnect",
+      "url": "https://app.constructconnect.com/",
+      "auth_user": "Dillon@GeneratorServicesInc.com",
+      "filters": {"state": "South Carolina"},
+      "search_terms": ["generator", "transfer switch", "emergency power", "standby power"],
+      "extract_fields": ["project_name", "owner", "gc", "bid_date", "estimated_value", "plans_available"]
+    },
+    {
+      "key": "bidbanana",
+      "name": "BidBanana",
+      "url": "https://bidbanana.thebidlab.com/",
+      "auth_user": "Dillon@GeneratorServicesInc.com",
+      "search_terms": ["generator", "transfer switch", "emergency power", "standby power", "UPS"]
+    }
+  ],
+
+  "tier1_municipal": [
+    {"key": "charleston_county", "name": "Charleston County", "url": "https://www.charlestoncounty.org/departments/procurement/current-bids.php"},
+    {"key": "greenville_county", "name": "Greenville County", "url": "http://www.greenvillecounty.org/apps/procurementpdf/projects.aspx?type=BID"},
+    {"key": "columbia", "name": "City of Columbia", "url": "https://www.columbiasc.net/procurement-contracts/opportunities"},
+    {"key": "richland_county", "name": "Richland County", "url": "http://www.richlandcountysc.gov/Businesses/Procurement-Contracting"},
+    {"key": "lexington_county", "name": "Lexington County", "url": "https://lex-co.sc.gov/departments/procurement-department/county-bid-opportunities"},
+    {"key": "beaufort_county", "name": "Beaufort County", "url": "https://www.beaufortcountysc.gov/purchasing/current-bids.html"},
+    {"key": "horry_county", "name": "Horry County", "url": "https://www.horrycounty.org/Departments/Procurement/Bids"},
+    {"key": "spartanburg_county", "name": "Spartanburg County", "url": "https://www.spartanburgcounty.org/Bids.aspx"},
+    {"key": "dorchester_county", "name": "Dorchester County", "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=e18973c1-4a13-4b63-a74f-feebcba670c0"},
+    {"key": "berkeley_county", "name": "Berkeley County", "url": "https://proposals.berkeleycountysc.gov/"},
+    {"key": "york_county", "name": "York County", "url": "https://www.yorkcountygov.com/437/Active-Bids"},
+    {"key": "rock_hill", "name": "City of Rock Hill", "url": "https://www.cityofrockhill.com/departments/general-government/purchasing/bids-proposal-requests"},
+    {"key": "florence_county", "name": "Florence County", "url": "http://florenceco.org/offices/procurement/bids/"},
+    {"key": "myrtle_beach", "name": "City of Myrtle Beach", "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=8dc4598a-8f2c-434e-bdae-1a39d5331ab6"},
+    {"key": "north_charleston", "name": "City of North Charleston", "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=7986766d-2204-46d0-854f-b12f2efe341a"},
+    {"key": "summerville", "name": "Town of Summerville", "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=3187e8aa-8f83-423f-b666-a57e2432b63b"},
+    {"key": "hilton_head", "name": "Town of Hilton Head Island", "url": "https://hiltonheadislandsc.bonfirehub.com/portal/?tab=openOpportunities"},
+    {"key": "bluffton", "name": "Town of Bluffton", "url": "https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=cd067191-8742-412f-a4dd-f56456474808"}
+  ],
+
+  "tier2_municipal": [
+    {"key": "aiken", "name": "Aiken", "url": null},
+    {"key": "anderson", "name": "Anderson", "url": null},
+    {"key": "bamberg", "name": "Bamberg", "url": null},
+    {"key": "barnwell", "name": "Barnwell", "url": null},
+    {"key": "beaufort_city", "name": "Beaufort (City)", "url": null},
+    {"key": "camden", "name": "Camden", "url": null},
+    {"key": "cayce", "name": "Cayce", "url": null},
+    {"key": "chester", "name": "Chester", "url": null},
+    {"key": "clemson", "name": "Clemson", "url": null},
+    {"key": "clinton", "name": "Clinton", "url": null},
+    {"key": "conway", "name": "Conway", "url": null},
+    {"key": "darlington", "name": "Darlington", "url": null},
+    {"key": "easley", "name": "Easley", "url": null},
+    {"key": "edgefield", "name": "Edgefield", "url": null},
+    {"key": "fairfield", "name": "Fairfield", "url": null},
+    {"key": "florence_city", "name": "Florence (City)", "url": null},
+    {"key": "fort_mill", "name": "Fort Mill", "url": null},
+    {"key": "fountain_inn", "name": "Fountain Inn", "url": null},
+    {"key": "georgetown", "name": "Georgetown", "url": null},
+    {"key": "goose_creek", "name": "Goose Creek", "url": null},
+    {"key": "greenwood", "name": "Greenwood", "url": null},
+    {"key": "greer", "name": "Greer", "url": null},
+    {"key": "hampton", "name": "Hampton", "url": null},
+    {"key": "hanahan", "name": "Hanahan", "url": null},
+    {"key": "hardeeville", "name": "Hardeeville", "url": null},
+    {"key": "hartsville", "name": "Hartsville", "url": null},
+    {"key": "isle_of_palms", "name": "Isle of Palms", "url": null},
+    {"key": "jasper", "name": "Jasper", "url": null},
+    {"key": "kershaw", "name": "Kershaw", "url": null},
+    {"key": "lake_city", "name": "Lake City", "url": null},
+    {"key": "lancaster", "name": "Lancaster", "url": null},
+    {"key": "laurens", "name": "Laurens", "url": null},
+    {"key": "loris", "name": "Loris", "url": null},
+    {"key": "marion", "name": "Marion", "url": null},
+    {"key": "marlboro", "name": "Marlboro", "url": null},
+    {"key": "mauldin", "name": "Mauldin", "url": null},
+    {"key": "mullins", "name": "Mullins", "url": null},
+    {"key": "newberry", "name": "Newberry", "url": null},
+    {"key": "north_augusta", "name": "North Augusta", "url": null},
+    {"key": "north_myrtle_beach", "name": "North Myrtle Beach", "url": null},
+    {"key": "oconee", "name": "Oconee", "url": null},
+    {"key": "orangeburg", "name": "Orangeburg", "url": null},
+    {"key": "pickens", "name": "Pickens", "url": null},
+    {"key": "saluda", "name": "Saluda", "url": null},
+    {"key": "seneca", "name": "Seneca", "url": null},
+    {"key": "surfside_beach", "name": "Surfside Beach", "url": null},
+    {"key": "tega_cay", "name": "Tega Cay", "url": null},
+    {"key": "travelers_rest", "name": "Travelers Rest", "url": null},
+    {"key": "union", "name": "Union", "url": null},
+    {"key": "walterboro", "name": "Walterboro", "url": null},
+    {"key": "west_columbia", "name": "West Columbia", "url": null},
+    {"key": "williamsburg", "name": "Williamsburg", "url": null},
+    {"key": "woodruff", "name": "Woodruff", "url": null}
+  ],
+
+  "tier3_municipal": [
+    {"key": "abbeville", "name": "Abbeville", "url": null},
+    {"key": "aynor", "name": "Aynor", "url": null},
+    {"key": "batesburg_leesville", "name": "Batesburg-Leesville", "url": null},
+    {"key": "bennettsville", "name": "Bennettsville", "url": null},
+    {"key": "blythewood", "name": "Blythewood", "url": null},
+    {"key": "calhoun", "name": "Calhoun", "url": null},
+    {"key": "campobello", "name": "Campobello", "url": null},
+    {"key": "chapin", "name": "Chapin", "url": null},
+    {"key": "cheraw", "name": "Cheraw", "url": null},
+    {"key": "chesterfield", "name": "Chesterfield", "url": null},
+    {"key": "clarendon", "name": "Clarendon", "url": null},
+    {"key": "clover", "name": "Clover", "url": null},
+    {"key": "colleton", "name": "Colleton", "url": null},
+    {"key": "cowpens", "name": "Cowpens", "url": null},
+    {"key": "due_west", "name": "Due West", "url": null},
+    {"key": "eastover", "name": "Eastover", "url": null},
+    {"key": "edisto_beach", "name": "Edisto Beach", "url": null},
+    {"key": "elgin", "name": "Elgin", "url": null},
+    {"key": "folly_beach", "name": "Folly Beach", "url": null},
+    {"key": "holly_hill", "name": "Holly Hill", "url": null},
+    {"key": "inman", "name": "Inman", "url": null},
+    {"key": "irmo", "name": "Irmo", "url": null},
+    {"key": "james_island", "name": "James Island", "url": null},
+    {"key": "lyman", "name": "Lyman", "url": null},
+    {"key": "mayesville", "name": "Mayesville", "url": null},
+    {"key": "meggett", "name": "Meggett", "url": null},
+    {"key": "pawleys_island", "name": "Pawley's Island", "url": null},
+    {"key": "paxville", "name": "Paxville", "url": null},
+    {"key": "pine_ridge", "name": "Pine Ridge", "url": null},
+    {"key": "port_royal", "name": "Port Royal", "url": null},
+    {"key": "quinby", "name": "Quinby", "url": null},
+    {"key": "ridge_spring", "name": "Ridge Spring", "url": null},
+    {"key": "ridgeland", "name": "Ridgeland", "url": null},
+    {"key": "ridgeway", "name": "Ridgeway", "url": null},
+    {"key": "santee", "name": "Santee", "url": null},
+    {"key": "seabrook_island", "name": "Seabrook Island", "url": null},
+    {"key": "sullivans_island", "name": "Sullivan's Island", "url": null}
+  ],
+
+  "schools": [
+    {"key": "spartanburg_district_5", "name": "Spartanburg District 5", "url": "https://www.spart5.net/procurement/solicitations"},
+    {"key": "clemson_university", "name": "Clemson University", "url": "https://www.clemson.edu/procurement/suppliers/index.html"},
+    {"key": "university_of_south_carolina", "name": "University of South Carolina", "url": "https://sc.edu/about/offices_and_divisions/purchasing/solicitations_awards/goods_services_procurements/index.php"}
+  ],
+
+  "notes": {
+    "tier2_urls_missing": "Tier 2 and Tier 3 entries are listed by name only. URLs should be filled in as they are discovered during initial scans, then this file committed back.",
+    "scan_cadence": {
+      "aggregators": "every run",
+      "authenticated_platforms": "every run",
+      "tier1_municipal": "every run",
+      "tier2_municipal": "Monday and Thursday",
+      "tier3_municipal": "Monday",
+      "schools": "every run"
+    }
+  }
+}
